@@ -79,7 +79,7 @@ function [] = run_prepro(WhichProject,WhichSessScan,subject,smoothing,discard,sl
     % Parent dir
     % ------------------------------------------------------------------------------
     cfg.parentdir = '/home/lindenmp/kg98/Linden/';
-    cfg.parentdir_scratch = '/home/lindenmp/kg98_scratch/Linden/';
+    cfg.parentdir_scratch = '/home/kaqu0001/kg98_scratch/kevo/';
 
     % ------------------------------------------------------------------------------
     % Add paths - edit this section
@@ -130,6 +130,8 @@ function [] = run_prepro(WhichProject,WhichSessScan,subject,smoothing,discard,sl
             run('OCDPG_config.m');
         case 'UCLA'
             run('UCLA_config.m');
+        case 'UCLA_native_MNI'
+            run('UCLA_native_MNI_config.m');
         case 'NYU_2'
             run('NYU_2_config.m');
         case 'COBRE'
@@ -272,7 +274,7 @@ function [] = run_prepro(WhichProject,WhichSessScan,subject,smoothing,discard,sl
 
         % ------------------------------------------------------------------------------
         % extract time series
-        runTS = 1;
+        runTS = 0;
         % ------------------------------------------------------------------------------
         if runTS == 1
             cd(cfg.outdir)
