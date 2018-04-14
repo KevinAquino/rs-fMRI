@@ -23,7 +23,8 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
     % 12 - Spatial smoothing
     %
     % Copyright (C) 2017, Linden Parkes <lindenparkes@gmail.com>,
-    %
+    % Additions 2018 by Kevin Aquino <kevin.aquino@monash.edu>
+    %       This is to add preprocessing in native space in addition to MNI warped space
     % ------------------------------------------------------------------------------
 
     fprintf('\n\t\t ----- Base preprocessing ----- \n\n');
@@ -464,6 +465,10 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
         for i = 1:length(wm); movefile(wm{i},cfg.t1dir); end
         for i = 1:length(csf); movefile(csf{i},cfg.t1dir); end
 
+        % Here will add the coregistration to epi files
+        %
+        % can be done at this very last step
+
     % ------------------------------------------------------------------------------
     % Create binary brain mask
     % ------------------------------------------------------------------------------
@@ -487,6 +492,9 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
         cd(cfg.preprodir)
         system([cfg.fsldir,'fslmaths ',epiBrainMask,' -add ',cfg.t1dir,t1BrainMask,' -bin brain_mask']);
         BrainMask = 'brain_mask.nii';
+
+        % At this point we will have to take the t1 image in its own space and do the mask here in that space.
+        % Probably best not to go from MNI back to T1 then back to EPI -- too many steps really.
 
     % ------------------------------------------------------------------------------
     % Mask out non-brain tissue from EPI image, T1, and GM map
@@ -561,6 +569,8 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
         system([cfg.fsldir,'fslmaths ',gm,' -thr .50 -bin ',gmmask]);
 
         clear hdr data data_temp
+
+        % Will have to add this using inverse warps back to T1 native then inverse affine back to EPI
 
     % ------------------------------------------------------------------------------
     % 4D intensity normalisation
