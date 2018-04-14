@@ -469,6 +469,7 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
         %
         % can be done at this very last step
 
+        keyboard
     % ------------------------------------------------------------------------------
     % Create binary brain mask
     % ------------------------------------------------------------------------------
