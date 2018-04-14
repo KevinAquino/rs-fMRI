@@ -78,7 +78,7 @@ function [] = run_prepro(WhichProject,WhichSessScan,subject,smoothing,discard,sl
     % ------------------------------------------------------------------------------
     % Parent dir
     % ------------------------------------------------------------------------------
-    cfg.parentdir = '/home/lindenmp/kg98/Linden/';
+    cfg.parentdir = '/home/kaqu0001/kg98/kevo/';
     cfg.parentdir_scratch = '/home/kaqu0001/kg98_scratch/kevo/';
 
     % ------------------------------------------------------------------------------
