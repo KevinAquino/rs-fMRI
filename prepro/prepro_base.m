@@ -718,8 +718,8 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
 
             % Get dvars
             dvarsExtract_native = NativeIntNormOut;
-            dvars = GetDVARS(dvarsExtract_native,NativeBrainMask);
-            dlmwrite('dvars_native.txt',dvars)
+            dvars_native = GetDVARS(dvarsExtract_native,NativeBrainMask);
+            dlmwrite('dvars_native.txt',dvars_native)
 
         elseif cfg.intnorm == 0
             NativeIntNormOut = NativeIntNormIn;
@@ -908,7 +908,7 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
 
     % Note that the naming of the files varies, this is because the way it is 
     % calculated is different
-    
+
     nativeStruct = struct;
     nativeStruct.tN           = tN;
     nativeStruct.gm           = native_gm;
