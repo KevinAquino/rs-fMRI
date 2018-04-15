@@ -183,7 +183,8 @@ function [] = run_prepro(WhichProject,WhichSessScan,subject,smoothing,discard,sl
     runBase = 1;
     % ------------------------------------------------------------------------------
     if runBase == 1
-        [cfg.tN,cfg.gm,cfg.wm,cfg.csf,cfg.epiBrainMask,cfg.t1BrainMask,cfg.BrainMask,cfg.gmmask,cfg.wmmask,cfg.csfmask,cfg.dvars,cfg.dvarsExtract,cfg.fdThr,cfg.dvarsThr,cfg.exclude,cfg.outEPI] = prepro_base(cfg);
+        [cfg.tN,cfg.gm,cfg.wm,cfg.csf,cfg.epiBrainMask,cfg.t1BrainMask,cfg.BrainMask,cfg.gmmask,cfg.wmmask,cfg.csfmask,cfg.dvars,cfg.dvarsExtract,cfg.fdThr,cfg.dvarsThr,cfg.exclude,cfg.outEPI,cfg.native] = prepro_base(cfg);
+        save([cfg.preprodir,'cfg_prepro_base.mat'],'cfg');
     elseif runBase == 0
         % assumes 6P has been run
         temp = load([cfg.preprodir,'6P/cfg.mat']);
@@ -222,6 +223,9 @@ function [] = run_prepro(WhichProject,WhichSessScan,subject,smoothing,discard,sl
         noiseOptions2Append = {'24P+4P+2GSR+JP14Scrub'};
         noiseOptions = [noiseOptions,noiseOptions2Append];
     end
+
+    % Starting at no options for the time being.
+    noiseOptions = {''};
 
     % Loop over noise correction options
     for i = 1:length(noiseOptions)
