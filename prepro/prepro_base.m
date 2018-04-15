@@ -1,4 +1,4 @@
-function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,dvars,dvarsExtract,fdThr,dvarsThr,exclude,outEPI] = prepro_base(cfg)
+function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,dvars,dvarsExtract,fdThr,dvarsThr,exclude,outEPI,nativeStruct] = prepro_base(cfg)
     % This script performs the base preprocessing, upon all variants of nuissance removal is run
     % These steps includes:
     %
@@ -465,11 +465,14 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
         for i = 1:length(wm); movefile(wm{i},cfg.t1dir); end
         for i = 1:length(csf); movefile(csf{i},cfg.t1dir); end
 
-        % Here will add the coregistration to epi files
-        %
-        % can be done at this very last step
+        % At this step we add the sform44 matrices to the realigned functional images, taken from
+        % the ANTS registration step. This is a small fork from the original pipeline -- we are keeping these
+        % for regression which we will use later on.
+        coregEPI = ['c',RealignOut];
+        coregmeanEPI = ['c',meanEPI];
 
-        keyboard
+        applyANTSrigidAlignmentToEPI(RealignOut,'epi2t1_0GenericAffine.mat',coregEPI);
+        applyANTSrigidAlignmentToEPI(meanEPI,'epi2t1_0GenericAffine.mat',coregmeanEPI);
     % ------------------------------------------------------------------------------
     % Create binary brain mask
     % ------------------------------------------------------------------------------
@@ -494,8 +497,31 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
         system([cfg.fsldir,'fslmaths ',epiBrainMask,' -add ',cfg.t1dir,t1BrainMask,' -bin brain_mask']);
         BrainMask = 'brain_mask.nii';
 
-        % At this point we will have to take the t1 image in its own space and do the mask here in that space.
-        % Probably best not to go from MNI back to T1 then back to EPI -- too many steps really.
+    % ------------------------------------------------------------------------------
+    % Create binary brain mask in Native EPI space
+    % ------------------------------------------------------------------------------
+        %       
+        % EPI
+        cd(cfg.preprodir)
+        MaskIn = coregEPI;
+        system([cfg.fsldir,'bet ',MaskIn,' epi_brain_native -f 0.4 -n -m -R']);
+        delete('epi_brain_native.nii')
+        epiBrainNativeMask = 'epi_brain_native_mask.nii';
+
+        % T1, this has been calculated above
+        cd(cfg.t1dir)
+        t1BrainNativeMask = 'native_t1_brain_mask.nii';
+
+        % now transform this mask onto native space using nearest neighbour interpolation
+        t1ResampledBrainNativeMask = 'epi_native_t1_brain_mask.nii';
+        system([cfg.fsldir,'flirt -in ',t1BrainNativeMask,' -ref ',cfg.preprodir,coregEPI,' -out ',t1ResampledBrainNativeMask,' -applyxfm -usesqform -interp nearestneighbour']);
+
+        % Union
+        cd(cfg.preprodir)
+        system([cfg.fsldir,'fslmaths ',epiBrainNativeMask,' -add ',cfg.t1dir,t1ResampledBrainNativeMask,' -bin brain_native_mask']);
+        NativeBrainMask = 'brain_native_mask.nii';
+
+
 
     % ------------------------------------------------------------------------------
     % Mask out non-brain tissue from EPI image, T1, and GM map
@@ -523,6 +549,23 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
         % T1 outputs
         normT1 = ['b',normT1];
         gm = ['b',gm];
+
+
+    % ------------------------------------------------------------------------------
+    % Mask out non-brain tissue from EPI image in native space
+    % ------------------------------------------------------------------------------
+    
+
+    cd(cfg.preprodir)
+    % EPI
+    system([cfg.fsldir,'fslmaths ',coregEPI,' -mas ',cfg.preprodir,NativeBrainMask,' b',coregEPI]);
+    system([cfg.fsldir,'fslmaths ',coregmeanEPI,' -mas ',cfg.preprodir,NativeBrainMask,' b',coregmeanEPI]);
+
+    % EPI outputs
+    coregEPI = ['b',coregEPI];
+    coregmeanEPI = ['b',coregmeanEPI];
+
+    % The T1 has already been brain masked (see above!)
 
     % ------------------------------------------------------------------------------
     % Generate MNI tissue masks for noise correction and tissue smoothing
@@ -573,9 +616,72 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
 
         % Will have to add this using inverse warps back to T1 native then inverse affine back to EPI
 
+
+    % ------------------------------------------------------------------------------
+    % Generate native space tissue masks for noise correction and tissue smoothing 
+    % ------------------------------------------------------------------------------
+    
+    cd(cfg.t1dir)
+
+    % wm interpolation
+    for i = 1:length(wm_temp);
+        [~,file,fmt] = fileparts(wm_temp{i});
+        epi_wm{i} = ['epi_',file,fmt];
+        system([cfg.fsldir,'flirt -in ',wm_temp{i},' -ref ',cfg.preprodir,coregEPI,' -out ',epi_wm{i},' -applyxfm -usesqform -interp nearestneighbour']);        
+    end
+
+    % csf interpolation
+    for i = 1:length(csf_temp); 
+        [~,file,fmt] = fileparts(csf_temp{i});
+        epi_csf{i} = ['epi_',file,fmt];
+       system([cfg.fsldir,'flirt -in ',csf_temp{i},' -ref ',cfg.preprodir,coregEPI,' -out ',epi_csf{i},' -applyxfm -usesqform -interp nearestneighbour']);         
+    end
+
+    % gm interpolation
+    native_gm = ['c1',cfg.t1name];
+    epi_gmmask = 'epi_gm.nii';
+    system([cfg.fsldir,'flirt -in ',native_gm,' -ref ',cfg.preprodir,coregEPI,' -out ',epi_gmmask,' -applyxfm -usesqform -interp nearestneighbour']);
+
+
+    % Do the same checks on the epi version
+    epi_wmmask = epi_wm{end};
+    % Check whether the final eroded epi_WM mask has no voxels
+    [hdr,data] = read(epi_wmmask);
+    if sum(data(:) > 0) < 5;
+        fprintf(1, '\t\t WARNING! the eroded epi_WM mask has too few voxels. Checking previous erosion steps.\n');
+        breakloop = 0;
+        i = length(epi_wm)-1;
+        while breakloop == 0
+            [hdr,data_temp] = read(epi_wm{i});
+            if sum(data_temp(:) > 0) >= 5;
+                epi_wmmask = epi_wm{i};
+                fprintf(1, '\t\t New epi_WM is erosion %u \n', i);
+                breakloop = 1;
+            end
+            i = i - 1;
+        end
+    end
+
+    epi_csfmask = epi_csf{end};
+    % Check whether the final eroded epi_CSF mask has no voxels
+    [hdr,data] = read(epi_csfmask);
+    if sum(data(:) > 0) < 5;
+        fprintf(1, '\t\t WARNING! the eroded epi_CSF mask has too few voxels. Checking previous erosion steps.\n');
+        [hdr,data_temp] = read(epi_csf{1});
+        if sum(data_temp(:) > 0) < 5;
+            error('\t\t There are no epi_CSF voxels... please check subject data.\n')
+        elseif sum(data_temp(:) > 0) >= 5;
+            fprintf(1, '\t\t New epi_CSF is erosion 1 \n');
+            epi_csfmask = epi_csf{1};
+        end
+    end
+
+    clear hdr data data_temp
+
     % ------------------------------------------------------------------------------
     % 4D intensity normalisation
     % ------------------------------------------------------------------------------
+        cd(cfg.preprodir)
         IntNormIn = normEPI;
 
         if cfg.intnorm == 1
@@ -595,6 +701,30 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
             IntNormOut = IntNormIn;
             dvarsExtract = NaN;
             dvars = NaN;
+        end
+
+    % ------------------------------------------------------------------------------
+    % 4D intensity normalisation native space
+    % ------------------------------------------------------------------------------
+        NativeIntNormIn = coregEPI;
+
+        if cfg.intnorm == 1
+            fprintf(1,'\n\t\t ----- EPI intensity normalisation ----- \n\n')
+            cd(cfg.preprodir)
+
+            NativeIntNormOut = ['i',NativeIntNormIn];
+
+            IntensityNormalise(NativeIntNormIn)
+
+            % Get dvars
+            dvarsExtract_native = NativeIntNormOut;
+            dvars = GetDVARS(dvarsExtract_native,NativeBrainMask);
+            dlmwrite('dvars_native.txt',dvars)
+
+        elseif cfg.intnorm == 0
+            NativeIntNormOut = NativeIntNormIn;
+            dvarsExtract_native = NaN;
+            dvars_native = NaN;
         end
 
     % ------------------------------------------------------------------------------
@@ -658,6 +788,63 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
 
         clear hdr data data_out
 
+
+    % ------------------------------------------------------------------------------
+    % Demean & Detrend EPI NATIVE
+    % ------------------------------------------------------------------------------
+        if cfg.detr == 1
+            fprintf(1,'\n\t\t ----- Detrending ----- \n\n')
+            cd(cfg.preprodir)
+
+            NativeDetrendIn = NativeIntNormOut;
+            NativeDetrendOut = ['d',NativeDetrendIn];
+
+            % load
+            [hdr,data] = read(NativeDetrendIn);
+
+            % reshape to 2d
+            dim = size(data);
+            data = reshape(data,[],dim(4));
+
+            % Detrend with all data
+            % now we have to type cast to double for the program, this is not needed for above since there was a normalization step that made some points non-doubles.
+            [data_out,~] = JP14_demean_detrend(double(data),cfg.demean);
+
+            data_out = reshape(data_out,dim);
+            write(hdr,data_out,NativeDetrendOut)
+
+            % ------------------------------------------------------------------------------
+            % Scrubbing (Power et al., 2014. NeuroImage)
+            % ------------------------------------------------------------------------------
+            if cfg.intnorm == 1 & cfg.runBandpass == 1
+                % use FD Power calculalted from above
+                % Create Power temporal mask
+                fdThr = 0.2;
+                dvarsThr = 20;
+                [scrubmask, exclude] = JP14_GetScrubMask(fd,dvars_native,cfg.TR,fdThr,dvarsThr);
+                dlmwrite('JP14_ScrubMask.txt',scrubmask)
+
+                % Detrend including censor mask
+                if exclude == 0
+                    [data_out,~] = JP14_demean_detrend(data,cfg.demean,~scrubmask(:,2));
+                    data_out = reshape(data_out,dim);
+                    write(hdr,data_out,['jp14',NativeDetrendOut])
+                elseif exclude == 1
+                    fprintf(1, '\t\t WARNING! There was not enough uncensored time points to perform scrubbing.\n');
+                end
+            else
+                fdThr = NaN;
+                dvarsThr = NaN;
+                exclude = NaN;
+            end
+
+        elseif cfg.detr == 0
+            NativeDetrendOut = NativeIntNormOut;
+        end
+
+        clear hdr data data_out
+
+
     % ------------------------------------------------------------------------------
     % Spatially smooth the data
     % ------------------------------------------------------------------------------
@@ -685,6 +872,61 @@ function [tN,gm,wm,csf,epiBrainMask,t1BrainMask,BrainMask,gmmask,wmmask,csfmask,
                 outEPI{4} = ['sjp14',SmoothIn];
             end
         end
+
+
+
+    % ------------------------------------------------------------------------------
+    % Spatially smooth the data NATIVE
+    % ------------------------------------------------------------------------------
+        fprintf('\n\t\t ----- Spatial smoothing ----- \n\n');
+        cd(cfg.preprodir)
+
+        SmoothIn = NativeDetrendOut;
+        SmoothEPI(SmoothIn,cfg.kernel,tN)
+
+        if cfg.intnorm == 1 & cfg.runBandpass == 1
+            if exclude == 0
+                SmoothEPI(['jp14',SmoothIn],cfg.kernel,tN)
+            end
+        end
+
+    % ------------------------------------------------------------------------------
+    % Outputs NATIVE
+    % ------------------------------------------------------------------------------
+        outNativeEPI{1} = SmoothIn;
+        outNativeEPI{2} = ['s',SmoothIn];
+
+        if cfg.intnorm == 1 & cfg.runBandpass == 1
+            if exclude == 0
+                outNativeEPI{3} = ['jp14',SmoothIn];
+                outNativeEPI{4} = ['sjp14',SmoothIn];
+            end
+        end
+    % ------------------------------------------------------------------------------
+    % saving NATIVE outputs in another structure
+    % ------------------------------------------------------------------------------
+
+    % Note that the naming of the files varies, this is because the way it is 
+    % calculated is different
+    
+    nativeStruct = struct;
+    nativeStruct.tN           = tN;
+    nativeStruct.gm           = native_gm;
+    nativeStruct.wm           = epi_wm;
+    nativeStruct.csf          = epi_csf;
+    nativeStruct.epiBrainMask = epiBrainNativeMask;
+    nativeStruct.t1BrainMask  = t1ResampledBrainNativeMask;
+    nativeStruct.BrainMask    = NativeBrainMask;
+    nativeStruct.gmmask       = epi_gmmask;
+    nativeStruct.wmmask       = epi_wmmask;
+    nativeStruct.csfmask      = epi_csfmask;
+    nativeStruct.dvars        = dvars_native;
+    nativeStruct.dvarsExtract = dvarsExtract_native;
+    nativeStruct.fdThr        = fdThr;
+    nativeStruct.dvarsThr     = dvarsThr;
+    nativeStruct.exclude      = exclude;
+    nativeStruct.outEPI       = outNativeEPI;
+    
 
     fprintf('\n\t\t ----- Base preprocessing complete ----- \n\n');
 end
