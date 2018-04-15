@@ -225,7 +225,7 @@ function [] = run_prepro(WhichProject,WhichSessScan,subject,smoothing,discard,sl
     end
 
     % Starting at no options for the time being.
-    noiseOptions = {''};
+    noiseOptions = [];
 
     % Loop over noise correction options
     for i = 1:length(noiseOptions)
