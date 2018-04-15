@@ -1,11 +1,11 @@
 #!/bin/env bash
 
 #SBATCH --job-name=fMRI-PrePro
-#SBATCH --account=monash076
+#SBATCH --account=kg98
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=05:00:00
-#SBATCH --mail-user=linden.parkes@monash.edu
+#SBATCH --mail-user=kevin.aquino@monash.edu
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-type=END
 #SBATCH --export=ALL
