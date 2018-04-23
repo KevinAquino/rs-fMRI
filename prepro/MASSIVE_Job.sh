@@ -43,7 +43,7 @@ cd /home/kaqu0001/kg98/kevo/Scripts/rs-fMRI/prepro
 smoothing=before
 discard=1
 slicetime=1
-despike=1
+despike=0
 detr=1
 intnorm=1
 
