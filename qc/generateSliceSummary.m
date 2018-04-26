@@ -1,4 +1,4 @@
-function [image_matrix] = generateSliceSummary(filename,sliceChoice,zoomedSize,fontScale,imgScale,cmap,ROI_box,orientation, mask,isabs,nomean)
+function [image_matrix] = generateSliceSummary(filename,sliceChoice,zoomedSize,fontScale,imgScale,cmap,ROI_box,orientation, mask,isabs,nomean,negIncluded)
 % Function here to generate summary images, saves them as pngs for everyone
 % to see.
 % usage:
@@ -42,6 +42,10 @@ end
 
 if(nargin<11)
     nomean = 0;
+end
+
+if(nargin<12)
+    negIncluded=0;
 end
 
 % Now loading in data using freesurfer's MRIread.
@@ -99,7 +103,12 @@ for sc=1:length(sliceChoice),
         dat2(dat2<0.05*max(dat2(:))) = 0;
     end
     
-    dat2 = uint8(reshape((meshData2Colors(dat2(:),cmap,[0 1])).'*255,[size(dat) 3]));
+    
+    if(negIncluded)
+        dat2 = uint8(reshape((meshData2Colors(dat2(:),cmap,[-1 1])).'*255,[size(dat) 3]));
+    else
+        dat2 = uint8(reshape((meshData2Colors(dat2(:),cmap,[0 1])).'*255,[size(dat) 3]));        
+    end
 %     keyboard
     
     % Here is for zooming in.
